@@ -164,7 +164,15 @@ def _nvidia_smi_sample() -> tuple[float, float] | None:
 def sample_gpu() -> tuple[float, float] | None:
     """Returns (util_pct, mem_used_mb), preferring NVML (fast, ~microseconds)
     over shelling out to nvidia-smi (~10-20ms/call). Returns None if neither
-    is usable (no GPU, no driver access, headless box without permissions)."""
+    is usable (no GPU, no driver access, headless box without permissions).
+
+    Device-wide, not process-scoped: on a shared GPU, this reflects *every*
+    process's utilization, not just the target command's. Zero-touch mode
+    (`pipesight run`) has no reliable way to attribute utilization to one
+    process from nvidia-smi/NVML alone -- if you're sharing the GPU, treat
+    quick-look idle-% as noisy and prefer the marker `Profiler` API (whose
+    spans are inherently scoped to your own process) for anything precise.
+    """
     return _nvml_sample() or _nvidia_smi_sample()
 
 

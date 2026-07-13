@@ -31,6 +31,12 @@ pipesight run --out trace.json -- python my_pipeline.py
 pipesight report trace.json
 ```
 
+Note: GPU utilization here comes from `nvidia-smi`/NVML, which is
+device-wide, not process-scoped -- on a shared GPU this includes *every*
+process's usage, not just your command's. Treat zero-touch idle-% as noisy
+on shared hardware; the marker API below is scoped to your own process and
+is the more reliable tier for anything you're going to act on.
+
 **Precise, stage-named profiling** (needed for overlap-opportunity detection
 and for driving `Pipeline`):
 
