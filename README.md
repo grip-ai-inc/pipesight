@@ -80,6 +80,46 @@ See `examples/synthetic_pipeline/` for a runnable, self-contained
 before/after demo, and `docs/pipeline_retrofit.md` for a worked example of
 retrofitting a real sequential loop.
 
+## CLI reference
+
+```
+$ pipesight --help
+usage: pipesight [-h] [--version] {run,report,compare,version} ...
+
+positional arguments:
+  {run,report,compare,version}
+    run                 Profile an arbitrary command with no code changes
+                        (zero-touch)
+    report              Analyze a captured trace and print recommendations
+    compare             Compare two traces (e.g. before/after a Pipeline
+                        retrofit)
+    version             Print the pipesight version
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
+```
+
+```
+$ pipesight run --help
+usage: pipesight run [-h] [--interval INTERVAL] [--out OUT] [--no-gpu] -- <command...>
+
+Profile an arbitrary command with no code changes (zero-touch).
+
+Everything after a literal `--` is run as the target command, e.g.:
+    pipesight run --out trace.json -- python my_script.py --arg1 val1
+
+options:
+  -h, --help           show this help message and exit
+  --interval INTERVAL  Sampling interval in seconds
+  --out OUT            Output trace JSON path
+  --no-gpu             Skip GPU utilization sampling
+```
+
+`pipesight report --help` and `pipesight compare --help` follow the same
+pattern — run them directly for the full flag list (`--merge-dir`,
+`--html`, `--physical-cores` on `report`; `--html` on `compare`).
+
 ## Layout
 
 - `pipesight.trace` — the `Span`/`Sample`/`Trace` data model and Chrome
