@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pipesight"
+version = "0.1.0"
+description = "Profile CPU/GPU pipeline stages, find idle-gap and overlap opportunities, and apply them with a drop-in Pipeline/Stage runtime."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+gpu = ["nvidia-ml-py>=12.0"]
+torch = ["torch>=2.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+pipesight = "pipesight.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+markers = [
+    "gpu: requires a CUDA-capable GPU",
+    "slow: slower integration-style test",
+]
+testpaths = ["tests"]
