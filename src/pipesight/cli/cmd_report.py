@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from pipesight.analysis.idle import gpu_idle_from_samples, gpu_idle_from_spans
+from pipesight.analysis.memory import memory_from_samples
 from pipesight.analysis.recommend import build_recommendations
 from pipesight.analysis.stats import stage_stats
 from pipesight.cli.render import render_text_report
@@ -43,8 +44,9 @@ def handle(args: argparse.Namespace) -> int:
     stats = stage_stats(trace.spans)
     idle = gpu_idle_from_spans(trace.spans) if trace.spans else gpu_idle_from_samples(trace.samples)
     recs = build_recommendations(trace, physical_cores=args.physical_cores)
+    memory = memory_from_samples(trace.samples)
 
-    print(render_text_report(stats=stats, idle=idle, recommendations=recs))
+    print(render_text_report(stats=stats, idle=idle, recommendations=recs, memory=memory))
 
     if args.html:
         from pipesight.viz.html import render_trace_html

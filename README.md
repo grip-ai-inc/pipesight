@@ -1,9 +1,6 @@
 # pipesight
 
-Profile the CPU/GPU stages of an end-to-end pipeline, find out where the GPU
-is sitting idle, get ranked recommendations for fixing it, and apply the fix
-with a drop-in `Pipeline`/`Stage` runtime instead of hand-rolling threading
-code.
+Profile the CPU/GPU stages of an end-to-end pipeline, find out where the GPU is sitting idle, get ranked recommendations for fixing it, and apply the fix with a drop-in `Pipeline`/`Stage` runtime instead of hand-rolling threading code.
 
 ## Why
 
@@ -80,19 +77,49 @@ See `examples/synthetic_pipeline/` for a runnable, self-contained
 before/after demo, and `docs/pipeline_retrofit.md` for a worked example of
 retrofitting a real sequential loop.
 
+## Diagnosing failures (dataloader crashes, OOM, fork/spawn)
+
+Profiling assumes the run *finishes*. When it instead dies with something like
+`DataLoader worker (pid N) is killed by signal: Killed`, use `diagnose`:
+
+```bash
+pipesight diagnose -- python train.py     # run it (tees stderr) and explain the failure
+pipesight diagnose run_trace.json         # diagnose a trace a previous run saved
+pipesight diagnose --log train.log        # pattern-match an existing log file
+```
+
+`diagnose` matches the run's failure signals — terminating signal, exit code,
+and a tail of stderr — against a playbook of known failure signatures (host
+OOM, `/dev/shm`/SIGBUS shared-memory exhaustion, `fork`-vs-`spawn` + CUDA,
+unpicklable datasets under spawn, file-descriptor exhaustion) and prints ranked,
+advisory explanations with concrete fixes (lower `num_workers`/`prefetch_factor`,
+raise `--shm-size`, switch the multiprocessing start method, …).
+
+Crucially, the live `-- <command>` form also samples **host memory** (system
+RAM plus the target's whole process-tree RSS) throughout the run, so an OOM kill
+is *corroborated* against a real memory timeline rather than guessed — and the
+same memory signal keeps the profiler's worker-count recommendation honest
+("you're CPU-bound and could add workers, but host RAM is near the ceiling").
+`pipesight run`/`report` surface this as a `== Memory ==` section.
+
+Everything `diagnose` prints is advisory: a signature matching is strong
+evidence from a known pattern, not proof.
+
 ## CLI reference
 
 ```
 $ pipesight --help
-usage: pipesight [-h] [--version] {run,report,compare,version} ...
+usage: pipesight [-h] [--version] {run,report,compare,diagnose,version} ...
 
 positional arguments:
-  {run,report,compare,version}
+  {run,report,compare,diagnose,version}
     run                 Profile an arbitrary command with no code changes
                         (zero-touch)
     report              Analyze a captured trace and print recommendations
     compare             Compare two traces (e.g. before/after a Pipeline
                         retrofit)
+    diagnose            Explain why a pipeline run failed
+                        (dataloader/OOM/shm/fork triage)
     version             Print the pipesight version
 
 options:
@@ -116,9 +143,10 @@ options:
   --no-gpu             Skip GPU utilization sampling
 ```
 
-`pipesight report --help` and `pipesight compare --help` follow the same
-pattern — run them directly for the full flag list (`--merge-dir`,
-`--html`, `--physical-cores` on `report`; `--html` on `compare`).
+`pipesight report --help`, `pipesight compare --help`, and `pipesight diagnose
+--help` follow the same pattern — run them directly for the full flag list
+(`--merge-dir`, `--html`, `--physical-cores` on `report`; `--html` on `compare`;
+`--log`, `--trace`, `--out` on `diagnose`).
 
 ## Layout
 
@@ -126,12 +154,17 @@ pattern — run them directly for the full flag list (`--merge-dir`,
   Trace Event Format JSON codec (`save`/`load`/`merge`). Traces open
   directly in `chrome://tracing` / `ui.perfetto.dev`.
 - `pipesight.profiling` — `Profiler` (opt-in stage markers) and the
-  zero-touch quick-look sampler.
+  zero-touch quick-look sampler (CPU/GPU utilization + host/process-tree
+  memory).
 - `pipesight.analysis` — per-stage stats, GPU idle-gap detection,
-  cross-iteration overlap-opportunity detection, ranked recommendations.
+  cross-iteration overlap-opportunity detection, host-memory pressure
+  analysis, ranked recommendations.
+- `pipesight.diagnose` — failure-signature playbook (generic + optional
+  PyTorch-specific) turning a crashed run's signals into ranked, advisory
+  explanations.
 - `pipesight.pipeline` — `Pipeline`/`StageSpec`, the overlap runtime.
 - `pipesight.viz` — self-contained HTML timeline rendering.
-- `pipesight.cli` — `pipesight run|report|compare|version`.
+- `pipesight.cli` — `pipesight run|report|compare|diagnose|version`.
 
 ## License
 

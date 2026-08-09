@@ -26,6 +26,33 @@ def test_save_load_roundtrip(tmp_path, span_factory, trace_factory):
     assert loaded.samples[0].gpu_util_pct == 5.0
 
 
+def test_memory_and_crash_fields_roundtrip(tmp_path, trace_factory):
+    trace = trace_factory([], source="quicklook", exit_code=None, term_signal=9)
+    trace.meta.stderr_tail = "DataLoader worker (pid 1) is killed by signal: Killed.\n"
+    trace.samples.append(
+        Sample(
+            ts_ns=5,
+            cpu_percent=[50.0],
+            sys_mem_used_mb=15000.0,
+            sys_mem_total_mb=16000.0,
+            proc_rss_mb=14000.0,
+            proc_count=9,
+        )
+    )
+    path = tmp_path / "trace.json"
+    trace_io.save(trace, path)
+    loaded = trace_io.load(path)
+
+    assert loaded.meta.term_signal == 9
+    assert loaded.meta.exit_code is None
+    assert "killed by signal" in loaded.meta.stderr_tail
+    s = loaded.samples[0]
+    assert s.sys_mem_used_mb == 15000.0
+    assert s.sys_mem_total_mb == 16000.0
+    assert s.proc_rss_mb == 14000.0
+    assert s.proc_count == 9
+
+
 def test_instant_event_roundtrip(tmp_path, span_factory, trace_factory):
     mark = span_factory("checkpoint", device="other", start_ns=42, dur_ns=0)
     trace = trace_factory([mark])

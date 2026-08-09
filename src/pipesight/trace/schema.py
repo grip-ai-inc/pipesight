@@ -30,13 +30,25 @@ class Span:
 
 @dataclass(frozen=True)
 class Sample:
-    """One coarse CPU/GPU utilization sample from zero-touch quick-look polling."""
+    """One coarse CPU/GPU utilization sample from zero-touch quick-look polling.
+
+    Memory fields are populated when the sampler is asked to track it (the
+    default for `pipesight run`/`diagnose`). `sys_mem_*` is host-wide RAM;
+    `proc_rss_mb`/`proc_count` cover the *target command's whole process
+    tree* (root + recursive children), so DataLoader/worker subprocesses are
+    included -- that's what makes an approaching-OOM kill visible before it
+    happens.
+    """
 
     ts_ns: int
     cpu_percent: list[float]
     gpu_util_pct: float | None = None
     gpu_mem_used_mb: float | None = None
     proc_id: int | None = None
+    sys_mem_used_mb: float | None = None
+    sys_mem_total_mb: float | None = None
+    proc_rss_mb: float | None = None
+    proc_count: int | None = None
 
 
 @dataclass
@@ -50,6 +62,14 @@ class TraceMeta:
     command: str | None = None
     wall_start_epoch_s: float = 0.0
     perf_counter_offset_ns: int = 0
+    # Populated for `pipesight run`/`diagnose` traces: how the target command
+    # ended. `term_signal` is the positive signal number when the process was
+    # killed by a signal (e.g. 9 = SIGKILL, the OOM killer's weapon of
+    # choice), else None. `stderr_tail` holds a bounded tail of the captured
+    # stderr (only when stderr was teed, i.e. `diagnose -- ...`).
+    exit_code: int | None = None
+    term_signal: int | None = None
+    stderr_tail: str | None = None
 
 
 @dataclass

@@ -74,6 +74,10 @@ def _sample_to_dict(sample: Sample) -> dict:
         "gpu_util_pct": sample.gpu_util_pct,
         "gpu_mem_used_mb": sample.gpu_mem_used_mb,
         "proc_id": sample.proc_id,
+        "sys_mem_used_mb": sample.sys_mem_used_mb,
+        "sys_mem_total_mb": sample.sys_mem_total_mb,
+        "proc_rss_mb": sample.proc_rss_mb,
+        "proc_count": sample.proc_count,
     }
 
 
@@ -84,6 +88,10 @@ def _dict_to_sample(d: dict) -> Sample:
         gpu_util_pct=d.get("gpu_util_pct"),
         gpu_mem_used_mb=d.get("gpu_mem_used_mb"),
         proc_id=d.get("proc_id"),
+        sys_mem_used_mb=d.get("sys_mem_used_mb"),
+        sys_mem_total_mb=d.get("sys_mem_total_mb"),
+        proc_rss_mb=d.get("proc_rss_mb"),
+        proc_count=d.get("proc_count"),
     )
 
 
@@ -161,6 +169,9 @@ def merge(traces: list[Trace]) -> Trace:
         command=ref.command,
         wall_start_epoch_s=base_epoch_ns / 1e9,
         perf_counter_offset_ns=0,
+        exit_code=ref.exit_code,
+        term_signal=ref.term_signal,
+        stderr_tail=ref.stderr_tail,
     )
     return Trace(meta=merged_meta, spans=merged_spans, samples=merged_samples)
 

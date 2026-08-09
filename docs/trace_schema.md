@@ -75,22 +75,28 @@ both directions; you should never need to do this conversion by hand.
   "cpu_count_physical": 2,
   "command": null,
   "wall_start_epoch_s": 1783920111.1880906,
-  "perf_counter_offset_ns": 27497740817755
+  "perf_counter_offset_ns": 27497740817755,
+  "exit_code": null,
+  "term_signal": null,
+  "stderr_tail": null
 }
 ```
 
 | Field | Meaning |
 |---|---|
-| `source` | `"marker"` (via `Profiler`), `"quicklook"` (via `pipesight run`), or `"torch_profiler"` (reserved for a future ingestion path — see the "Not yet supported" section below) |
+| `source` | `"marker"` (via `Profiler`), `"quicklook"` (via `pipesight run`/`diagnose`), or `"torch_profiler"` (reserved for a future ingestion path — see the "Not yet supported" section below) |
 | `gpu_name` | Set for quick-look traces (queried via NVML/`nvidia-smi`); `null` for marker traces, since a marker trace can span non-GPU work entirely |
 | `cpu_count_logical` / `cpu_count_physical` | Captured at `Profiler`/quick-look start; `pipesight report`'s worker-count recommendation defaults to `cpu_count_physical` unless you pass `--physical-cores` |
 | `command` | The full command line, for `source="quicklook"` traces only (`shlex.join`'d) |
 | `wall_start_epoch_s` / `perf_counter_offset_ns` | See "Clock alignment" below |
+| `exit_code` | How the target command ended, for `pipesight run`/`diagnose` traces: normal exit status (`>= 0`), or `null` if it was killed by a signal instead |
+| `term_signal` | Positive signal number if the target was killed by a signal (e.g. `9` = SIGKILL, the OOM killer), else `null`. Consumed by `pipesight diagnose` |
+| `stderr_tail` | Bounded tail of the target's stderr, captured **only** by `pipesight diagnose -- <command>` (which tees stderr); `null` for plain `run` (which leaves stderr untouched) and marker traces |
 
 ## `pipesight.samples` — zero-touch mode's `Sample`s
 
-Only populated for `source="quicklook"` traces (`pipesight run`). Each
-entry is one poll of `psutil`/NVML at the configured `--interval`:
+Only populated for `source="quicklook"` traces (`pipesight run`/`diagnose`).
+Each entry is one poll of `psutil`/NVML at the configured `--interval`:
 
 ```json
 {
@@ -98,7 +104,11 @@ entry is one poll of `psutil`/NVML at the configured `--interval`:
   "cpu_percent": [0.0, 0.0, 0.0, 0.0],
   "gpu_util_pct": 88.0,
   "gpu_mem_used_mb": 2864.1875,
-  "proc_id": null
+  "proc_id": null,
+  "sys_mem_used_mb": 12103.5,
+  "sys_mem_total_mb": 15740.0,
+  "proc_rss_mb": 9841.2,
+  "proc_count": 9
 }
 ```
 
@@ -107,9 +117,20 @@ entry is one poll of `psutil`/NVML at the configured `--interval`:
 `--no-gpu` was passed. `gpu_util_pct` is **device-wide, not
 process-scoped** — see `pipesight.profiling.gpu.sample_gpu`'s docstring and
 `examples/synthetic_pipeline/README.md` for what that means in practice on
-a shared GPU. Marker traces (`source="marker"`) have an empty `samples`
-list — spans already give exact per-stage timing, so there's nothing
-coarse polling would add.
+a shared GPU.
+
+The memory fields (populated unless memory sampling was disabled):
+
+| Field | Meaning |
+|---|---|
+| `sys_mem_used_mb` / `sys_mem_total_mb` | Host RAM in MiB. `used` is `total - available` (excludes reclaimable cache) — the number that matters for how close the OOM killer is |
+| `proc_rss_mb` | Summed RSS (MiB) of the target command's **whole process tree** (root + recursive children), so DataLoader/worker subprocesses are included. Sums over-count shared pages, so treat it as an upper bound. `null` in samples taken before the target process existed |
+| `proc_count` | Number of processes in that tree — worker fan-out shows up here |
+
+`pipesight report` renders these as a `== Memory ==` section, and
+`pipesight diagnose` uses them to corroborate an OOM kill. Marker traces
+(`source="marker"`) have an empty `samples` list — spans already give exact
+per-stage timing, so there's nothing coarse polling would add.
 
 ## Clock alignment (why `wall_start_epoch_s` / `perf_counter_offset_ns` exist)
 

@@ -6,7 +6,10 @@ import argparse
 import sys
 
 from pipesight._version import __version__
-from pipesight.cli import cmd_compare, cmd_report, cmd_run
+from pipesight.cli import cmd_compare, cmd_diagnose, cmd_report, cmd_run
+
+# Subcommands that take a `-- <command...>` passthrough.
+_PASSTHROUGH_COMMANDS = ("run", "diagnose")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -17,21 +20,24 @@ def build_parser() -> argparse.ArgumentParser:
     cmd_run.build_parser(subparsers)
     cmd_report.build_parser(subparsers)
     cmd_compare.build_parser(subparsers)
+    cmd_diagnose.build_parser(subparsers)
     subparsers.add_parser("version", help="Print the pipesight version")
 
     return parser
 
 
 def _split_run_passthrough(argv: list[str]) -> tuple[list[str], list[str] | None]:
-    """`pipesight run -- <command...>`: argparse doesn't cleanly support
+    """`pipesight <cmd> -- <command...>`: argparse doesn't cleanly support
     "everything after a literal --" alongside a subcommand's own flags, so
-    split it off manually before argparse ever sees it."""
-    if "run" not in argv:
+    split it off manually before argparse ever sees it. Applies to the
+    passthrough subcommands (`run`, `diagnose`)."""
+    idxs = [argv.index(c) for c in _PASSTHROUGH_COMMANDS if c in argv]
+    if not idxs:
         return argv, None
-    run_idx = argv.index("run")
-    if "--" not in argv[run_idx:]:
+    cmd_idx = min(idxs)
+    if "--" not in argv[cmd_idx:]:
         return argv, None
-    sep_idx = argv.index("--", run_idx)
+    sep_idx = argv.index("--", cmd_idx)
     return argv[:sep_idx], argv[sep_idx + 1 :]
 
 
@@ -60,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_report.handle(args)
     if args.command == "compare":
         return cmd_compare.handle(args)
+    if args.command == "diagnose":
+        return cmd_diagnose.handle(args, passthrough)
 
     parser.error(f"unknown command: {args.command}")
     return 2

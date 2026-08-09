@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pipesight.analysis.idle import IdleReport
+from pipesight.analysis.memory import MemoryReport
 from pipesight.analysis.recommend import Recommendation
 from pipesight.analysis.stats import StageStats
 
@@ -38,6 +39,32 @@ def render_idle(idle: IdleReport) -> str:
     )
 
 
+def fmt_mib(mb: float) -> str:
+    """Adaptive MiB/GiB so small footprints don't render as a misleading '0.0 GiB'."""
+    return f"{mb / 1024:.1f} GiB" if mb >= 1024 else f"{mb:.0f} MiB"
+
+
+def render_memory(mem: MemoryReport) -> str:
+    if not mem.has_data or mem.peak_used_pct is None:
+        return "  (no host-memory samples in this trace)"
+    line = (
+        f"  Host RAM peak: {mem.peak_used_pct:.0f}% of {fmt_mib(mem.sys_total_mb or 0)} "
+        f"({fmt_mib(mem.headroom_mb or 0)} free at peak)"
+    )
+    if mem.peak_proc_rss_mb is not None:
+        line += (
+            f"\n  Target process tree peak: {fmt_mib(mem.peak_proc_rss_mb)} RSS "
+            f"across up to {mem.peak_proc_count} process(es)"
+        )
+    if mem.near_ceiling:
+        line += (
+            "\n  WARNING: host RAM approached the ceiling -- a dataloader/worker OOM "
+            "('worker killed by signal: Killed') is likely here. Run `pipesight diagnose` "
+            "for specifics."
+        )
+    return line
+
+
 def render_recommendations(recs: list[Recommendation]) -> str:
     if not recs:
         return "  No recommendations -- GPU utilization looks reasonable, or not enough data."
@@ -55,6 +82,7 @@ def render_text_report(
     stats: dict[str, StageStats],
     idle: IdleReport,
     recommendations: list[Recommendation],
+    memory: MemoryReport | None = None,
 ) -> str:
     parts = [
         "== Stage stats ==",
@@ -62,6 +90,10 @@ def render_text_report(
         "",
         "== GPU idle ==",
         render_idle(idle),
+    ]
+    if memory is not None and memory.has_data:
+        parts += ["", "== Memory ==", render_memory(memory)]
+    parts += [
         "",
         "== Recommendations ==",
         render_recommendations(recommendations),
